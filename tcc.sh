@@ -1,10 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Help ---
+usage() {
+    cat <<'EOF'
+tcc — tmux claude session creator
+
+Usage: tcc <path-or-url> [branch]
+
+Creates a tmux session with three windows: Claude (--effort high),
+nvim, and a plain shell.
+
+Behavior depends on context:
+  Git URL      Clone the repo into $TCC_HOME (default: $HOME).
+  Git repo     Create a new worktree at the given path.
+  Otherwise    Create a new directory and git init.
+
+If a tmux session with the derived name already exists, tcc simply
+switches to it without touching the filesystem.
+
+Arguments:
+  path-or-url  A git URL, directory path, or project name.
+  branch       Optional. Sets the clone branch, worktree branch,
+               or init branch (defaults to "main" for new repos,
+               or inferred from path for worktrees).
+
+Environment:
+  TCC_HOME     Base directory for cloned repos (default: $HOME).
+
+Examples:
+  tcc https://github.com/user/repo.git
+  tcc https://github.com/user/repo.git develop
+  tcc ../my-feature
+  tcc my-project
+  tcc my-project feature-branch
+EOF
+    exit 0
+}
+
 # --- Argument parsing ---
-if [[ $# -lt 1 ]]; then
-    echo "Usage: tcc <path-or-url> [branch]" >&2
-    exit 1
+if [[ $# -lt 1 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+    usage
 fi
 
 input="$1"
@@ -99,13 +135,9 @@ fi
 
 # --- Create tmux session with 3 windows ---
 
-tmux new-session -d -s "$session" -c "$project_dir"
-tmux send-keys -t "$session:1" "claude --effort high" Enter
-
-tmux new-window -t "$session" -c "$project_dir"
-tmux send-keys -t "$session:2" "nvim" Enter
-
-tmux new-window -t "$session" -c "$project_dir"
+tmux new-session -d -s "$session" -n "claude" -c "$project_dir" "bash -c 'claude --effort high; exec $SHELL'"
+tmux new-window -t "$session" -n "nvim" -c "$project_dir" "bash -c 'nvim; exec $SHELL'"
+tmux new-window -t "$session" -n "shell" -c "$project_dir"
 
 # Attach or switch
 switch_or_attach "$session"
